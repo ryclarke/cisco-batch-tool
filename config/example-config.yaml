@@ -1,0 +1,12 @@
+git:
+  host: github.com
+  project: ryclarke
+  default-branch: develop
+repos:
+  sort: true
+  reviewers:
+    cisco-batch-tool:
+      - ryclarke
+  aliases:
+    example:
+      - cisco-batch-tool
