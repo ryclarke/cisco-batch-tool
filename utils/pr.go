@@ -10,7 +10,7 @@ import (
 )
 
 // GenPR generates a PR payload for the Bitbucket v1 API
-func GenPR(name, title string, reviewers []string) string {
+func GenPR(name, title, description string, reviewers []string) string {
 	project := viper.GetString(config.GitProject)
 
 	// generate list of reviewers
@@ -21,7 +21,7 @@ func GenPR(name, title string, reviewers []string) string {
 		}
 	}
 
-	return fmt.Sprintf(config.PrTmpl, title,
+	return fmt.Sprintf(config.PrTmpl, title, description,
 		viper.GetString(config.Branch), fmt.Sprintf(config.PrRepoTmpl, name, project),
 		viper.GetString(config.SourceBranch), fmt.Sprintf(config.PrRepoTmpl, name, project),
 		strings.Join(revs, ","),
@@ -56,6 +56,12 @@ func (pr PR) AddReviewers(reviewers []string) {
 			"user": map[string]interface{}{"name": rev},
 		})
 	}
+}
+
+// SetReviewers sets the PR reviewers to the given list
+func (pr PR) SetReviewers(reviewers []string) {
+	pr["reviewers"] = make([]interface{}, 0, len(reviewers))
+	pr.AddReviewers(reviewers)
 }
 
 // GetReviewers returns the list of reviewers for the PR

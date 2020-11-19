@@ -26,7 +26,7 @@ clean:
 package: $(RELEASES)
 $(RELEASE_LINUX): $(TARGET_LINUX)
 	@mkdir -p release/
-	${TARCMD}
+	$(TARCMD)
 
 $(RELEASE_DARWIN): $(TARGET_DARWIN)
 	@mkdir -p release/

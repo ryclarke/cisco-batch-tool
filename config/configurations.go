@@ -41,6 +41,7 @@ const (
 	ApiPathTmpl = "https://%s/rest/api/1.0/projects/%s/repos/%s/pull-requests"
 	PrTmpl      = `{
 	"title": "%s",
+	"description": "%s",
 	"fromRef": {
 		"id": "refs/heads/%s",
 		"repository": %s
