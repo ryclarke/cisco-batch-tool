@@ -8,8 +8,14 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/ryclarke/cisco-batch-tool/call"
 	"github.com/ryclarke/cisco-batch-tool/config"
 	"github.com/ryclarke/cisco-batch-tool/utils"
+)
+
+var (
+	prTitle       string
+	prDescription string
 )
 
 // Cmd configures the root pr command along with all subcommands and flags
@@ -18,21 +24,41 @@ func Cmd() *cobra.Command {
 		Use:   "pr [cmd] <repository> ...",
 		Short: "Manage pull requests using the BitBucket v1 API",
 		Args:  cobra.MinimumNArgs(1),
+		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
+			return utils.ValidateRequiredConfig(config.AuthToken)
+		},
+		Run: func(_ *cobra.Command, args []string) {
+			call.Do(args, call.Wrap(utils.ValidateBranch, getPRCmd))
+		},
 	}
+
+	rootCmd.PersistentFlags().StringVarP(&prTitle, "title", "t", "", "pull request title")
+	rootCmd.PersistentFlags().StringVarP(&prDescription, "description", "d", "", "pull request description")
 
 	rootCmd.PersistentFlags().StringSliceP("reviewer", "r", nil, "pull request reviewer (cecid)")
 	viper.BindPFlag(config.Reviewers, rootCmd.PersistentFlags().Lookup("reviewer"))
 
-	defaultCmd := addNewCmd()
-
 	rootCmd.AddCommand(
-		defaultCmd,
+		addNewCmd(),
 		addEditCmd(),
 		addMergeCmd(),
 	)
-	rootCmd.Run = defaultCmd.Run
 
 	return rootCmd
+}
+
+func getPRCmd(name string, ch chan<- string) error {
+	pr, err := getPR(name)
+	if err != nil {
+		return err
+	}
+
+	ch <- fmt.Sprintf("(PR #%d) %s %v\n", pr.ID(), pr["title"].(string), pr.GetReviewers())
+	if pr["description"].(string) != "" {
+		ch <- fmt.Sprintln(pr["description"].(string))
+	}
+
+	return nil
 }
 
 func getPR(name string) (utils.PR, error) {

@@ -15,6 +15,8 @@ import (
 	"github.com/ryclarke/cisco-batch-tool/utils"
 )
 
+var noAppendReviewers bool
+
 // addEditCmd initializes the pr edit command
 func addEditCmd() *cobra.Command {
 	editCmd := &cobra.Command{
@@ -26,6 +28,8 @@ func addEditCmd() *cobra.Command {
 		},
 	}
 
+	editCmd.Flags().BoolVar(&noAppendReviewers, "no-append", false, "set the reviewer list instead of appending")
+
 	return editCmd
 }
 
@@ -35,8 +39,21 @@ func editPR(name string, ch chan<- string) error {
 		return err
 	}
 
-	// append reviewers to the PR and perform necessary modifications
-	pr.AddReviewers(utils.LookupReviewers(name))
+	if prTitle != "" {
+		pr["title"] = prTitle
+	}
+
+	if prDescription != "" {
+		pr["description"] = prDescription
+	}
+
+	// set or append reviewers to the PR and perform necessary modifications
+	if noAppendReviewers {
+		pr.SetReviewers(utils.LookupReviewers(name))
+	} else {
+		pr.AddReviewers(utils.LookupReviewers(name))
+	}
+
 	delete(pr, "participants")
 	delete(pr, "author")
 
@@ -57,6 +74,7 @@ func editPR(name string, ch chan<- string) error {
 	if err != nil {
 		return err
 	}
+
 	defer resp.Body.Close()
 
 	if resp.StatusCode > 399 {

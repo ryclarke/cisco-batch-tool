@@ -15,7 +15,7 @@ import (
 	"github.com/ryclarke/cisco-batch-tool/utils"
 )
 
-var prTitle string
+var allReviewers bool
 
 // addNewCmd initializes the pr new command
 func addNewCmd() *cobra.Command {
@@ -23,15 +23,12 @@ func addNewCmd() *cobra.Command {
 		Use:   "new <repository> ...",
 		Short: "Submit new pull requests",
 		Args:  cobra.MinimumNArgs(1),
-		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
-			return utils.ValidateRequiredConfig(config.AuthToken)
-		},
 		Run: func(_ *cobra.Command, args []string) {
 			call.Do(args, call.Wrap(utils.ValidateBranch, newPR))
 		},
 	}
 
-	newCmd.Flags().StringVarP(&prTitle, "title", "t", "", "pull request title")
+	newCmd.Flags().BoolVarP(&allReviewers, "all-reviewers", "a", false, "use all provided reviewers for a new PR")
 
 	return newCmd
 }
@@ -42,10 +39,9 @@ func newPR(name string, ch chan<- string) error {
 		return err
 	}
 
-	// set PR title (defaults to branch name)
-	title := branch
-	if prTitle != "" {
-		title = prTitle
+	// default PR title is branch name
+	if prTitle == "" {
+		prTitle = branch
 	}
 
 	reviewers := utils.LookupReviewers(name)
@@ -53,7 +49,13 @@ func newPR(name string, ch chan<- string) error {
 		// append placeholder to prevent NPE below
 		reviewers = append(reviewers, "")
 	}
-	payload := utils.GenPR(name, title, []string{reviewers[0]})
+
+	// remove all but the first reviewer by default
+	if !allReviewers && len(reviewers) > 1 {
+		reviewers = reviewers[:1]
+	}
+
+	payload := utils.GenPR(name, prTitle, prDescription, reviewers)
 
 	request, err := http.NewRequest(http.MethodPost, utils.ApiPath(name), strings.NewReader(payload))
 	if err != nil {
@@ -67,6 +69,7 @@ func newPR(name string, ch chan<- string) error {
 	if err != nil {
 		return err
 	}
+
 	defer resp.Body.Close()
 
 	output, err := ioutil.ReadAll(resp.Body)

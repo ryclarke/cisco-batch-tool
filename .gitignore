@@ -123,3 +123,4 @@ secrets-local.tmpl
 
 # IDE
 .vscode/
+.idea/
