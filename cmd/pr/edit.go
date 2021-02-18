@@ -21,14 +21,14 @@ var noAppendReviewers bool
 func addEditCmd() *cobra.Command {
 	editCmd := &cobra.Command{
 		Use:   "edit <repository> ...",
-		Short: "Update reviewers of pull requests",
+		Short: "Update existing pull requests",
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(_ *cobra.Command, args []string) {
 			call.Do(args, call.Wrap(utils.ValidateBranch, editPR))
 		},
 	}
 
-	editCmd.Flags().BoolVar(&noAppendReviewers, "no-append", false, "set the reviewer list instead of appending")
+	editCmd.Flags().BoolVar(&noAppendReviewers, "no-append", false, "don't append to the reviewer list")
 
 	return editCmd
 }
@@ -49,7 +49,10 @@ func editPR(name string, ch chan<- string) error {
 
 	// set or append reviewers to the PR and perform necessary modifications
 	if noAppendReviewers {
-		pr.SetReviewers(utils.LookupReviewers(name))
+		// if no-append is combined with reviewers, replace existing (otherwise ignore reviewers entirely)
+		if len(viper.GetStringSlice(config.Reviewers)) > 0 {
+			pr.SetReviewers(utils.LookupReviewers(name))
+		}
 	} else {
 		pr.AddReviewers(utils.LookupReviewers(name))
 	}
