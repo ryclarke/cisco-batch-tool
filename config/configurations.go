@@ -26,6 +26,8 @@ const (
 	SortRepos        = "repos.sort"
 	RepoAliases      = "repos.aliases"
 	DefaultReviewers = "repos.reviewers"
+	CatalogCacheFile = "repos.cache.filename"
+	CatalogCacheTTL  = "repos.cache.ttl"
 
 	CommitAmend   = "commit.amend"
 	CommitMessage = "commit.message"
@@ -69,8 +71,16 @@ func Init() {
 	viper.SetDefault(SourceBranch, "develop")
 	viper.SetDefault(SortRepos, true)
 	viper.SetDefault(UseSync, false)
+	viper.SetDefault(CatalogCacheFile, ".catalog")
+	viper.SetDefault(CatalogCacheTTL, "24h")
 
 	viper.SetDefault(ChannelBuffer, 100)
+
+	// default reviewers in the form `repo: [reviewers...]`
+	viper.SetDefault(DefaultReviewers, map[string][]string{})
+
+	// aliases in the form `alias: [repos...]`
+	viper.SetDefault(RepoAliases, map[string][]string{})
 
 	if gopath, err := exec.Command("go", "env", "GOPATH").Output(); err == nil {
 		viper.SetDefault(EnvGopath, strings.TrimSpace(string(gopath)))
@@ -101,10 +111,4 @@ func Init() {
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Printf("Using config file: %v\n\n", viper.ConfigFileUsed())
 	}
-
-	// default reviewers in the form `repo: [reviewers...]`
-	viper.SetDefault(DefaultReviewers, map[string][]string{})
-
-	// aliases in the form `alias: [repos...]`
-	viper.SetDefault(RepoAliases, map[string][]string{})
 }

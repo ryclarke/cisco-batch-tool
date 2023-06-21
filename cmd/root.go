@@ -10,6 +10,7 @@ import (
 	"github.com/ryclarke/cisco-batch-tool/cmd/git"
 	"github.com/ryclarke/cisco-batch-tool/cmd/pr"
 	"github.com/ryclarke/cisco-batch-tool/config"
+	"github.com/ryclarke/cisco-batch-tool/utils"
 )
 
 // RootCmd configures the top-level root command along with all subcommands and flags
@@ -17,7 +18,7 @@ func RootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "batch-tool",
 		Short: "Batch tool for working across multiple git repositories",
-		Long:  `Batch tool for working across multiple git repositories
+		Long: `Batch tool for working across multiple git repositories
 
 This tool provides a collection of utility functions that facilitate work across
 multiple git repositories, including branch management and pull request creation.`,
@@ -55,7 +56,18 @@ multiple git repositories, including branch management and pull request creation
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the RootCmd.
 func Execute() {
-	cobra.OnInitialize(config.Init)
+	cobra.OnInitialize(config.Init, func() {
+		if err := utils.InitRepositoryCatalog(); err != nil {
+			fmt.Printf("ERROR: Could not load repository metadata: %v", err)
+		} else {
+			aliases := viper.GetStringMap(config.RepoAliases)
+			for name, repos := range utils.Labels {
+				aliases["~"+name] = repos
+			}
+
+			viper.Set(config.RepoAliases, aliases)
+		}
+	})
 
 	if err := RootCmd().Execute(); err != nil {
 		fmt.Println(err)
