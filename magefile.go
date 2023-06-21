@@ -1,4 +1,4 @@
-// +build mage
+//go:build mage
 
 package main
 
@@ -15,111 +15,182 @@ import (
 // If not set, running mage will list available targets
 // var Default = Build
 
+const (
+	binName     = "batch-tool"
+	defaultArch = "amd64"
+
+	osLinux   = "linux"
+	osWindows = "windows"
+	osDarwin  = "darwin"
+
+	dirBuild   = "bin"
+	dirPackage = "release"
+)
+
 var Aliases = map[string]interface{}{
 	"build":   Build.All,
 	"package": Package.All,
 }
 
-var targets = map[string]string{
-	"linux":   "bin/linux/batch-tool",
-	"darwin":  "bin/darwin/batch-tool",
-	"windows": "bin/windows/batch-tool.exe",
+//
+var targets = map[string][]string{
+	osLinux:   []string{"amd64", "arm64"},
+	osWindows: []string{"amd64"},
+	osDarwin:  []string{"amd64", "arm64"},
 }
 
-var releases = map[string]string{
-	"linux":   "release/batch-tool-linux.txz",
-	"darwin":  "release/batch-tool-darwin.txz",
-	"windows": "release/batch-tool-windows.zip",
+//
+var sources = []string{
+	"magefile.go", "main.go", "go.mod", "go.sum", "call", "cmd", "config", "utils",
 }
 
 type Build mg.Namespace
 
-// helper function to call go build with the correct os and target
-func goBuild(goOS string) error {
-	env := map[string]string{
-		"GOARCH": "amd64",
-		"GOOS":   goOS,
-	}
-	// TODO(dakojohn): Should we provide an Install option as well to directly install the program using `go install`?
-	return sh.RunWith(env, "go", "build", "-o", targets[goOS])
-}
-
-// Build the executables for all three supported platforms
+// Build the executables for all supported platforms
 func (Build) All() {
 	// Declares target dependencies that will be run in parallel
-	mg.Deps(Build.Linux, Build.Darwin, Build.Windows)
+	deps := make([]interface{}, 0)
+
+	for targetOS, archList := range targets {
+		for _, arch := range archList {
+			deps = append(deps, mg.F(build, targetOS, arch))
+		}
+	}
+
+	mg.Deps(deps...)
 }
 
-// Build the executable for Linux
-func (Build) Linux() error {
-	return goBuild("linux")
+// Build the executable for Linux only
+func (Build) Linux(arch string) error {
+	return build(osLinux, arch)
 }
 
-// Build the executable for MacOS
-func (Build) Darwin() error {
-	return goBuild("darwin")
+// Build the executable for Windows only
+func (Build) Windows(arch string) error {
+	return build(osWindows, arch)
 }
 
-// Build the executable for Windows
-func (Build) Windows() error {
-	return goBuild("windows")
+// Build the executable for MacOS only
+func (Build) Darwin(arch string) error {
+	return build(osDarwin, arch)
 }
 
 type Package mg.Namespace
 
-// Helper function for the tar command for MacOS and Linux.  Command should work on both platforms.
-func tarCmd(targetOS string) error {
-	// While much more verbose, this could be fleshed out with a go-native implementation that would be cross-platform compatible.
-	// Relevant standard library packages would be archive and compress.
-	dir := fmt.Sprintf("-C%s", filepath.Dir(targets[targetOS]))
-	file := filepath.Base(targets[targetOS])
-	return sh.Run("tar", "-caf", releases[targetOS], dir, file)
-}
-
-// Package the executables for all three supported platforms
+// Package the executables for all supported platforms
 func (Package) All() {
-	mg.Deps(Package.Linux, Package.Darwin, Package.Windows)
+	// Declares target dependencies that will be run in parallel
+	deps := make([]interface{}, 0)
+
+	for targetOS, archList := range targets {
+		for _, arch := range archList {
+			deps = append(deps, mg.F(release, targetOS, arch))
+		}
+	}
+
+	mg.Deps(deps...)
 }
 
-// Package the executable for Linux
-func (Package) Linux() error {
-	// Unlike `mg.Deps()` which declares the target functions to run as dependencies, the target package operates like make file-targets.
-	// It checks if the sources have been modified more recently than the destination.
-	// Params are `target.Path([destination], [sources...])`.
-	if updated, err := target.Path(releases["linux"], targets["linux"]); !updated || err != nil {
-		return err
-	}
-	if err := os.MkdirAll("release", 0755); err != nil {
-		return err
-	}
-	return tarCmd("linux")
+// Package the executable for Linux only
+func (Package) Linux(arch string) error {
+	return release(osLinux, arch)
 }
 
-// Package the executable for MacOS
-func (Package) Darwin() error {
-	if updated, err := target.Path(releases["darwin"], targets["darwin"]); !updated || err != nil {
-		return err
-	}
-	if err := os.MkdirAll("release", 0755); err != nil {
-		return err
-	}
-	return tarCmd("darwin")
+// Package the executable for Windows only
+func (Package) Windows(arch string) error {
+	return release(osWindows, arch)
 }
 
-// Package the executable for Windows
-func (Package) Windows() error {
-	if updated, err := target.Path(releases["windows"], targets["windows"]); !updated || err != nil {
-		return err
-	}
-	if err := os.MkdirAll("release", 0755); err != nil {
-		return err
-	}
-	return sh.Run("zip", "-j", releases["windows"], targets["windows"])
+// Package the executable for MacOS only
+func (Package) Darwin(arch string) error {
+	return release(osDarwin, arch)
+}
+
+// Install the executable to your local system
+func Install() error {
+	return sh.RunV("go", "install")
 }
 
 // Clean up after yourself
-func Clean() {
-	//fmt.Println("Cleaning...")
-	sh.Rm("bin")
-	sh.Rm("release")
+func Clean() error {
+	fmt.Println("Cleaning build artifacts and release packages")
+
+	var origErr error
+
+	for _, path := range []string{dirBuild, dirPackage} {
+		if err := sh.Rm(path); err != nil {
+			origErr = err
+		}
+	}
+
+	return origErr
+}
+
+// Helper function to call go build with the correct target OS and architecture
+func build(targetOS, arch string) error {
+	buildTarget := parseBuildTarget(targetOS, arch)
+	env := map[string]string{
+		"GOARCH": arch,
+		"GOOS":   targetOS,
+	}
+
+	if updated, err := target.Path(buildTarget, sources...); !updated || err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(filepath.Join(dirBuild, targetOS), 0755); err != nil {
+		return err
+	}
+
+	fmt.Printf("Building %s/%s\n", targetOS, arch)
+
+	return sh.RunWithV(env, "go", "build", "-o", buildTarget)
+}
+
+// Helper function to package a release for the given target OS and architecture
+func release(targetOS, arch string) error {
+	// package is dependent on build for the same OS/arch
+	mg.Deps(mg.F(build, targetOS, arch))
+
+	buildTarget := parseBuildTarget(targetOS, arch)
+	packageTarget := parsePackageTarget(targetOS, arch)
+
+	// check if built binaries have been updated since the last package execution
+	if updated, err := target.Path(packageTarget, buildTarget); !updated || err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(dirPackage, 0755); err != nil {
+		return err
+	}
+
+	fmt.Printf("Packaging %s/%s\n", targetOS, arch)
+
+	if targetOS == osWindows {
+		return sh.Run("zip", "-j", packageTarget, buildTarget)
+	}
+
+	// While much more verbose, this could be fleshed out with a go-native implementation that would be cross-platform compatible.
+	// Relevant standard library packages would be archive and compress.
+	return sh.RunV("tar", "-caf", packageTarget, "-C", filepath.Dir(buildTarget), filepath.Base(buildTarget))
+}
+
+func parseBuildTarget(targetOS, arch string) string {
+	filename := fmt.Sprintf("%s-%s", binName, arch)
+	if targetOS == osWindows {
+		filename += ".exe"
+	}
+
+	return filepath.Join(dirBuild, targetOS, filename)
+}
+
+func parsePackageTarget(targetOS, arch string) string {
+	filename := fmt.Sprintf("%s-%s-%s", binName, targetOS, arch)
+	if targetOS == osWindows {
+		filename += ".zip"
+	} else {
+		filename += ".txz"
+	}
+
+	return filepath.Join(dirPackage, filename)
 }
