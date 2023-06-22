@@ -27,6 +27,11 @@ multiple git repositories, including branch management and pull request creation
 			if noSort, _ := cmd.Flags().GetBool("no-sort"); noSort {
 				viper.Set(config.SortRepos, false)
 			}
+
+			// Allow the `--no-skip-unwanted` flag to override label skipping configuration
+			if noSkip, _ := cmd.Flags().GetBool("no-skip-unwanted"); noSkip {
+				viper.Set(config.SkipUnwanted, false)
+			}
 		},
 	}
 
@@ -59,6 +64,10 @@ multiple git repositories, including branch management and pull request creation
 	// --no-sort is excluded from usage and help output, and is an alternative to --sort=false
 	rootCmd.PersistentFlags().Bool("no-sort", false, "")
 	rootCmd.PersistentFlags().MarkHidden("no-sort")
+
+	// --no-skip-unwanted is excluded from usage and help output, and is an alternative to --skip-unwanted=false
+	rootCmd.PersistentFlags().Bool("no-skip-unwanted", false, "")
+	rootCmd.PersistentFlags().MarkHidden("no-skip-unwanted")
 
 	return rootCmd
 }
