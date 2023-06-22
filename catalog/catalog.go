@@ -1,4 +1,4 @@
-package utils
+package catalog
 
 import (
 	"encoding/json"
@@ -7,15 +7,40 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/spf13/viper"
 
 	"github.com/ryclarke/cisco-batch-tool/config"
 )
 
+const (
+	labelKey   = "~"
+	excludeKey = "!"
+)
+
+// Catalog contains a cached set of repositories and their metadata from Bitbucket
 var Catalog = make(map[string]Repository)
-var Labels = make(map[string][]string)
+
+// Labels contains a mapping of label names with the set of repositories matching each label
+var Labels = make(map[string]mapset.Set[string])
+
+func Init() {
+	if err := initRepositoryCatalog(); err != nil {
+		fmt.Printf("ERROR: Could not load repository metadata: %v", err)
+	}
+
+	// Add locally-configured aliases to the defined labels
+	for name, repos := range viper.GetStringMapStringSlice(config.RepoAliases) {
+		if _, ok := Labels[name]; !ok {
+			Labels[name] = mapset.NewSet[string](repos...)
+		} else {
+			Labels[name].Append(repos...)
+		}
+	}
+}
 
 type Repository struct {
 	Name        string   `json:"name"`
@@ -25,7 +50,37 @@ type Repository struct {
 	Labels      []string `json:"labels,omitempty"`
 }
 
-func InitRepositoryCatalog() error {
+func RepositoryList(filters ...string) mapset.Set[string] {
+	includeSet := mapset.NewSet[string]()
+	excludeSet := mapset.NewSet[string]()
+
+	for _, filter := range filters {
+		filterName := strings.ReplaceAll(strings.ReplaceAll(filter, labelKey, ""), excludeKey, "")
+
+		if strings.Contains(filter, excludeKey) {
+			if strings.Contains(filter, labelKey) {
+				excludeSet.Union(Labels[filterName])
+			} else {
+				excludeSet.Add(filterName)
+			}
+		} else {
+			if strings.Contains(filter, labelKey) {
+				includeSet.Union(Labels[filterName])
+			} else {
+				includeSet.Add(filterName)
+			}
+		}
+	}
+
+	// Always exclude unwanted labels
+	if viper.GetBool(config.SkipUnwanted) {
+		excludeSet.Append(viper.GetStringSlice(config.UnwantedLabels)...)
+	}
+
+	return includeSet.Difference(excludeSet)
+}
+
+func initRepositoryCatalog() error {
 	if len(Catalog) > 0 {
 		return nil
 	}
@@ -75,7 +130,11 @@ func loadCatalogCache() error {
 
 	for _, repo := range Catalog {
 		for _, label := range repo.Labels {
-			Labels[label] = append(Labels[label], repo.Name)
+			if _, ok := Labels[label]; !ok {
+				Labels[label] = mapset.NewSet[string](repo.Name)
+			} else {
+				Labels[label].Add(repo.Name)
+			}
 		}
 	}
 
@@ -122,7 +181,11 @@ func fetchRepositoryData() error {
 		Catalog[repo.Name] = repo
 
 		for _, label := range repo.Labels {
-			Labels[label] = append(Labels[label], repo.Name)
+			if _, ok := Labels[label]; !ok {
+				Labels[label] = mapset.NewSet[string](repo.Name)
+			} else {
+				Labels[label].Add(repo.Name)
+			}
 		}
 	}
 

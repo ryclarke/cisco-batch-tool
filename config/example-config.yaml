@@ -7,6 +7,11 @@ repos:
   reviewers:
     cisco-batch-tool:
       - ryclarke
+    another-repo:
+      - ryclarke
+  skip-unwanted: true
+  unwanted-labels: deprecated,poc
   aliases:
     example:
       - cisco-batch-tool
+      - another-repo

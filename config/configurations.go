@@ -13,6 +13,8 @@ import (
 var CfgFile string
 
 const (
+	Version = "v0.4.0"
+
 	EnvGopath = "gopath"
 
 	GitUser      = "git.user"
@@ -25,6 +27,8 @@ const (
 
 	SortRepos        = "repos.sort"
 	RepoAliases      = "repos.aliases"
+	UnwantedLabels   = "repos.unwanted-labels"
+	SkipUnwanted     = "repos.skip-unwanted"
 	DefaultReviewers = "repos.reviewers"
 	CatalogCacheFile = "repos.cache.filename"
 	CatalogCacheTTL  = "repos.cache.ttl"
@@ -70,6 +74,8 @@ func Init() {
 
 	viper.SetDefault(SourceBranch, "develop")
 	viper.SetDefault(SortRepos, true)
+	viper.SetDefault(SkipUnwanted, true)
+	viper.SetDefault(UnwantedLabels, []string{"deprecated", "poc"})
 	viper.SetDefault(UseSync, false)
 	viper.SetDefault(CatalogCacheFile, ".catalog")
 	viper.SetDefault(CatalogCacheTTL, "24h")

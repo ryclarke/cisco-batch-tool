@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/viper"
 
+	"github.com/ryclarke/cisco-batch-tool/catalog"
 	"github.com/ryclarke/cisco-batch-tool/config"
 )
 
@@ -60,33 +61,7 @@ func DoSync(repos []string, fwrap Wrapper) {
 }
 
 func processArguments(args []string) []string {
-	aliases := viper.GetStringMapStringSlice(config.RepoAliases)
-	repos := make([]string, 0, len(args))
-
-	// Expand any defined repository group aliases
-	for _, repo := range args {
-		if list := aliases[repo]; len(list) > 0 {
-			repos = append(repos, list...)
-		} else {
-			repos = append(repos, repo)
-		}
-	}
-
-	// Remove duplicate repository entries
-	repoMap := make(map[string]struct{}, len(repos))
-
-	for _, repo := range repos {
-		repoMap[repo] = struct{}{}
-	}
-
-	repos = make([]string, len(repoMap))
-
-	var i int
-
-	for repo := range repoMap {
-		repos[i] = repo
-		i++
-	}
+	repos := catalog.RepositoryList(args...).ToSlice()
 
 	// Sort the repositories alphabetically
 	if viper.GetBool(config.SortRepos) {
