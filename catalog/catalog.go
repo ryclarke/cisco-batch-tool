@@ -41,6 +41,13 @@ func Init() {
 			Labels[name].Append(repos...)
 		}
 	}
+
+	// Add superset label which matches all repositories in the catalog
+	Labels[supersetLabel] = mapset.NewSet[string]()
+
+	for name := range Catalog {
+		Labels[supersetLabel].Add(name)
+	}
 }
 
 type Repository struct {
@@ -55,27 +62,33 @@ func RepositoryList(filters ...string) mapset.Set[string] {
 	includeSet := mapset.NewSet[string]()
 	excludeSet := mapset.NewSet[string]()
 
+	// Exclude unwanted labels by default
+	if viper.GetBool(config.SkipUnwanted) {
+		for _, unwanted := range viper.GetStringSlice(config.UnwantedLabels) {
+			filters = append(filters, unwanted+labelKey+excludeKey)
+		}
+	}
+
 	for _, filter := range filters {
 		filterName := strings.ReplaceAll(strings.ReplaceAll(filter, labelKey, ""), excludeKey, "")
 
 		if strings.Contains(filter, excludeKey) {
 			if strings.Contains(filter, labelKey) {
-				excludeSet.Union(Labels[filterName])
+				if set, ok := Labels[filterName]; ok {
+					excludeSet = excludeSet.Union(set)
+				}
 			} else {
 				excludeSet.Add(filterName)
 			}
 		} else {
 			if strings.Contains(filter, labelKey) {
-				includeSet.Union(Labels[filterName])
+				if set, ok := Labels[filterName]; ok {
+					includeSet = includeSet.Union(set)
+				}
 			} else {
 				includeSet.Add(filterName)
 			}
 		}
-	}
-
-	// Always exclude unwanted labels
-	if viper.GetBool(config.SkipUnwanted) {
-		excludeSet.Append(viper.GetStringSlice(config.UnwantedLabels)...)
 	}
 
 	return includeSet.Difference(excludeSet)
@@ -129,8 +142,6 @@ func loadCatalogCache() error {
 
 	Catalog = cached.Repositories
 
-	Labels[supersetLabel] = mapset.NewSet[string]()
-
 	for _, repo := range Catalog {
 		for _, label := range repo.Labels {
 			if _, ok := Labels[label]; !ok {
@@ -139,8 +150,6 @@ func loadCatalogCache() error {
 				Labels[label].Add(repo.Name)
 			}
 		}
-
-		Labels[supersetLabel].Add(repo.Name)
 	}
 
 	return nil
@@ -173,8 +182,6 @@ func fetchRepositoryData() error {
 		return err
 	}
 
-	Labels[supersetLabel] = mapset.NewSet[string]()
-
 	for _, repo := range resp.Values {
 		repo.Project = project
 
@@ -194,8 +201,6 @@ func fetchRepositoryData() error {
 				Labels[label].Add(repo.Name)
 			}
 		}
-
-		Labels[supersetLabel].Add(repo.Name)
 	}
 
 	return saveCatalogCache()
