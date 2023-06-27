@@ -7,10 +7,10 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/ryclarke/cisco-batch-tool/catalog"
 	"github.com/ryclarke/cisco-batch-tool/cmd/git"
 	"github.com/ryclarke/cisco-batch-tool/cmd/pr"
 	"github.com/ryclarke/cisco-batch-tool/config"
-	"github.com/ryclarke/cisco-batch-tool/utils"
 )
 
 // RootCmd configures the top-level root command along with all subcommands and flags
@@ -27,11 +27,23 @@ multiple git repositories, including branch management and pull request creation
 			if noSort, _ := cmd.Flags().GetBool("no-sort"); noSort {
 				viper.Set(config.SortRepos, false)
 			}
+
+			// Allow the `--no-skip-unwanted` flag to override label skipping configuration
+			if noSkip, _ := cmd.Flags().GetBool("no-skip-unwanted"); noSkip {
+				viper.Set(config.SkipUnwanted, false)
+			}
 		},
 	}
 
 	// Add all subcommands to the root
 	rootCmd.AddCommand(
+		&cobra.Command{
+			Use:   "version",
+			Short: "Print the current batch-tool version",
+			Run: func(_ *cobra.Command, repos []string) {
+				fmt.Println(config.Version)
+			},
+		},
 		git.Cmd(),
 		pr.Cmd(),
 		addMakeCmd(),
@@ -46,9 +58,16 @@ multiple git repositories, including branch management and pull request creation
 	rootCmd.PersistentFlags().Bool("sort", true, "sort the provided repositories")
 	viper.BindPFlag(config.SortRepos, rootCmd.PersistentFlags().Lookup("sort"))
 
+	rootCmd.PersistentFlags().Bool("skip-unwanted", true, "skip undesired labels (default: deprecated,poc)")
+	viper.BindPFlag(config.SkipUnwanted, rootCmd.PersistentFlags().Lookup("skip-unwanted"))
+
 	// --no-sort is excluded from usage and help output, and is an alternative to --sort=false
 	rootCmd.PersistentFlags().Bool("no-sort", false, "")
 	rootCmd.PersistentFlags().MarkHidden("no-sort")
+
+	// --no-skip-unwanted is excluded from usage and help output, and is an alternative to --skip-unwanted=false
+	rootCmd.PersistentFlags().Bool("no-skip-unwanted", false, "")
+	rootCmd.PersistentFlags().MarkHidden("no-skip-unwanted")
 
 	return rootCmd
 }
@@ -56,18 +75,7 @@ multiple git repositories, including branch management and pull request creation
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the RootCmd.
 func Execute() {
-	cobra.OnInitialize(config.Init, func() {
-		if err := utils.InitRepositoryCatalog(); err != nil {
-			fmt.Printf("ERROR: Could not load repository metadata: %v", err)
-		} else {
-			aliases := viper.GetStringMap(config.RepoAliases)
-			for name, repos := range utils.Labels {
-				aliases["~"+name] = repos
-			}
-
-			viper.Set(config.RepoAliases, aliases)
-		}
-	})
+	cobra.OnInitialize(config.Init, catalog.Init)
 
 	if err := RootCmd().Execute(); err != nil {
 		fmt.Println(err)
