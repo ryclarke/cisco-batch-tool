@@ -17,8 +17,9 @@ import (
 )
 
 const (
-	labelKey   = "~"
-	excludeKey = "!"
+	labelKey      = "~"
+	excludeKey    = "!"
+	supersetLabel = "all"
 )
 
 // Catalog contains a cached set of repositories and their metadata from Bitbucket
@@ -128,6 +129,8 @@ func loadCatalogCache() error {
 
 	Catalog = cached.Repositories
 
+	Labels[supersetLabel] = mapset.NewSet[string]()
+
 	for _, repo := range Catalog {
 		for _, label := range repo.Labels {
 			if _, ok := Labels[label]; !ok {
@@ -136,6 +139,8 @@ func loadCatalogCache() error {
 				Labels[label].Add(repo.Name)
 			}
 		}
+
+		Labels[supersetLabel].Add(repo.Name)
 	}
 
 	return nil
@@ -168,6 +173,8 @@ func fetchRepositoryData() error {
 		return err
 	}
 
+	Labels[supersetLabel] = mapset.NewSet[string]()
+
 	for _, repo := range resp.Values {
 		repo.Project = project
 
@@ -187,6 +194,8 @@ func fetchRepositoryData() error {
 				Labels[label].Add(repo.Name)
 			}
 		}
+
+		Labels[supersetLabel].Add(repo.Name)
 	}
 
 	return saveCatalogCache()
