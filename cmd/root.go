@@ -40,14 +40,22 @@ multiple git repositories, including branch management and pull request creation
 		&cobra.Command{
 			Use:   "version",
 			Short: "Print the current batch-tool version",
-			Run: func(_ *cobra.Command, repos []string) {
+			Run: func(_ *cobra.Command, _ []string) {
 				fmt.Println(config.Version)
+			},
+		},
+		&cobra.Command{
+			Use:   "catalog",
+			Short: "Print information on the cached repository catalog",
+			Run: func(_ *cobra.Command, _ []string) {
+				fmt.Printf("%v\n", catalog.Catalog)
 			},
 		},
 		git.Cmd(),
 		pr.Cmd(),
 		addMakeCmd(),
 		addShellCmd(),
+		addLabelsCmd(),
 	)
 
 	rootCmd.PersistentFlags().StringVar(&config.CfgFile, "config", "", "config file (default is .config.yaml)")
