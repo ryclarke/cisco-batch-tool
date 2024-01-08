@@ -9,6 +9,7 @@ import (
 	"github.com/magefile/mage/target"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 // Default target to run when none is specified
@@ -32,14 +33,12 @@ var Aliases = map[string]interface{}{
 	"package": Package.All,
 }
 
-//
 var targets = map[string][]string{
 	osLinux:   []string{"amd64", "arm64"},
 	osWindows: []string{"amd64"},
 	osDarwin:  []string{"amd64", "arm64"},
 }
 
-//
 var sources = []string{
 	"magefile.go", "main.go", "go.mod", "go.sum", "call", "cmd", "config", "utils",
 }
@@ -108,7 +107,15 @@ func (Package) Darwin(arch string) error {
 
 // Install the executable to your local system
 func Install() error {
-	return sh.RunV("go", "install")
+	if err := sh.RunV("go", "install"); err != nil {
+		return err
+	}
+
+	if runtime.GOOS == "windows" {
+		return os.Rename(filepath.Join(findGoBinDir(), "cisco-batch-tool.exe"), filepath.Join(findGoBinDir(), "batch-tool.exe"))
+	}
+
+	return os.Rename(filepath.Join(findGoBinDir(), "cisco-batch-tool"), filepath.Join(findGoBinDir(), "batch-tool"))
 }
 
 // Clean up after yourself
@@ -193,4 +200,18 @@ func parsePackageTarget(targetOS, arch string) string {
 	}
 
 	return filepath.Join(dirPackage, filename)
+}
+
+// findGoBinDir returns the path used by go install based on the documented logic here: https://go.dev/ref/mod#go-install
+func findGoBinDir() string {
+	if path, ok := os.LookupEnv("GOBIN"); ok {
+		return path
+	}
+
+	if path, ok := os.LookupEnv("GOPATH"); ok {
+		return filepath.Join(path, "bin")
+	}
+
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, "go", "bin")
 }

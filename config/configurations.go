@@ -107,6 +107,16 @@ func Init() {
 		// Search in system configuration (Linux/Darwin only)
 		viper.AddConfigPath("/usr/local/etc/")
 
+		if val, ok := os.LookupEnv("XDG_CONFIG_HOME"); ok {
+			viper.AddConfigPath(val)
+		} else {
+			home, _ := os.UserHomeDir()
+			viper.AddConfigPath(filepath.Join(home, ".config"))
+		}
+
+		usrConfig, _ := os.UserConfigDir()
+		viper.AddConfigPath(usrConfig)
+
 		// Search in the executable's directory
 		if ex, err := os.Executable(); err == nil {
 			viper.AddConfigPath(filepath.Dir(ex))
